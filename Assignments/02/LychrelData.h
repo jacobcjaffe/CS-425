@@ -36,7 +36,9 @@ class LychrelData {
     size_t _size;
 
     // Index to next available data item.
-    std::atomic<size_t> _current = 0;
+    std::atomic<size_t> _currentBeg = 0;
+
+	std::atomic<size_t> _currentEnd;
 
     // Critical region exclusion lock to prevent multiple threads
     //   modifying the _current value simultaneously
@@ -89,6 +91,8 @@ class LychrelData {
             std::cerr << "Unable to memory map the index file ... exiting\n";
             exit(EXIT_FAILURE);
         }
+
+		_currentEnd = _size - 1;
     }
 
     //
@@ -105,7 +109,7 @@ class LychrelData {
 
     // Return the available (i.e., not already distributed) data values
     size_t available() const
-        { return _size - _current; }
+        { return _size - _currentBeg; }
 
     // (readonly) Array indexing operator
     Number operator[] (size_t index) const {
@@ -126,8 +130,8 @@ class LychrelData {
         size_t index;
         {
             std::lock_guard{_mutex};
-            index = _current++;
-            if (index >= _size) { return false; }
+            index = _currentBeg++;
+            if (index > _currentEnd || index >= _size) { return false; }
         }
 
         auto start = _indices[index];
@@ -138,6 +142,19 @@ class LychrelData {
 
         return true;
     }
+	bool getPrev(Number& n) {
+		size_t index;
+        {
+            std::lock_guard{_mutex};
+            index = _currentEnd--;
+            if (index < _currentBeg || index <= _size) { return false; }
+        }
+        auto start = _indices[index];
+        auto end   = _indices[index+1];
+        n.resize(end - start);
+        n.assign(&_digits[start], &_digits[end]);
+		return true;
+	}
 
     // Thread-safe multiple number retrieval function.  Returns true, storing
     //   as many available values (up to the requested value) in the <numbers>
@@ -146,14 +163,14 @@ class LychrelData {
         size_t index;
         {
             std::lock_guard lock{_mutex};
-            index = _current;
+            index = _currentBeg;
             
             if (index >= _size) { return false; }
 
             if (index + count >= _size) {
                 count = _size - index;
             }
-            _current += count;
+            _currentBeg += count;
         }
 
         numbers.resize(count);

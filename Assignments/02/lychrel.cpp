@@ -56,42 +56,85 @@ int main() {
 
 	// ok so first we need to loop through he threads at each pass
 	for (int id = 0; id < MaxThreads; ++id){
-		std::thread th{[&, id]() {
-			Number number;
-			size_t iter = 0;
-			while(data.getNext(number)) {
-				iter = 0;
-				Number n = number;
-				while (!n.is_palindrome() && ++iter < MaxIterations) {
-					Number sum(n.size());
-					Number r = n.reverse();
-					auto rd = n.begin();
-					bool carry = false;
-					std::transform(n.rbegin(), n.rend(), sum.rbegin(), 
-						[&](auto d) {
-							auto v = d + *rd++ + carry;
-							carry = v > 9;
-							if (carry) { v -= 10; }
-							return v;
+		if (id < 5) {
+			std::thread th{[&, id]() {
+				Number number;
+				size_t iter = 0;
+				while(data.getNext(number)) {
+					iter = 0;
+					Number n = number;
+					while (!n.is_palindrome() && ++iter < MaxIterations) {
+						Number sum(n.size());
+						Number r = n.reverse();
+						auto rd = n.begin();
+						bool carry = false;
+						std::transform(n.rbegin(), n.rend(), sum.rbegin(), 
+							[&](auto d) {
+								auto v = d + *rd++ + carry;
+								carry = v > 9;
+								if (carry) { v -= 10; }
+								return v;
+							}
+						);
+						if (carry) { sum.push_front(1); }
+						n = sum;
+					}
+					{
+						std::lock_guard lock{mutex}; 
+						if (!(iter < maxIter || iter == MaxIterations)){
+							Record record{number, n};
+							if (iter > maxIter) {
+								records.clear();
+								maxIter = iter;
+							}
+							records.push_back(record);
 						}
-					);
-					if (carry) { sum.push_front(1); }
-					n = sum;
-				}
-				{
-					std::lock_guard lock{mutex}; 
-					if (!(iter < maxIter || iter == MaxIterations)){
-						Record record{number, n};
-						if (iter > maxIter) {
-							records.clear();
-							maxIter = iter;
-						}
-						records.push_back(record);
 					}
 				}
-			}
-			barrier.arrive_and_wait();
-		}};
+				barrier.arrive_and_wait();
+			}};
+			(id < LastId) ? th.detach() : th.join();
+		}
+		else {
+			std::thread th{[&, id]() {
+				Number number;
+				size_t iter = 0;
+				while(data.getNext(number)) {
+					iter = 0;
+					Number n = number;
+					while (!n.is_palindrome() && ++iter < MaxIterations) {
+						Number sum(n.size());
+						Number r = n.reverse();
+						auto rd = n.begin();
+						bool carry = false;
+						std::transform(n.rbegin(), n.rend(), sum.rbegin(), 
+							[&](auto d) {
+								auto v = d + *rd++ + carry;
+								carry = v > 9;
+								if (carry) { v -= 10; }
+								return v;
+							}
+						);
+						if (carry) { sum.push_front(1); }
+						n = sum;
+					}
+					{
+						std::lock_guard lock{mutex}; 
+						if (!(iter < maxIter || iter == MaxIterations)){
+							Record record{number, n};
+							if (iter > maxIter) {
+								records.clear();
+								maxIter = iter;
+							}
+							records.push_back(record);
+						}
+					}
+				}
+				barrier.arrive_and_wait();
+			}};
+			(id < LastId) ? th.detach() : th.join();
+		}
+
         
 		/*
         // need to divide the the data into chunks that will be given to the threads.
@@ -136,7 +179,6 @@ int main() {
         }};
 		*/
         //(id < LastId) ? t.detach() : t.join();
-        (id < LastId) ? th.detach() : th.join();
 	}
         // Update our records.  First, determine if we have a new
         //   maximum number of iterations that isn't the control limit
