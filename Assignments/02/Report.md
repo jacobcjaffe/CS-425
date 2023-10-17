@@ -5,6 +5,8 @@ Commits
     the other half retrieving from the back of the numbers.
 4: Tried creating a queue, but timing is worse. I think it may have to do with copying the
     data repeatedly
+5: Simply used the getNext using a vector
+
 Inital Timing:
 Real: .659s
 User: 4.141s
@@ -25,3 +27,7 @@ Real: .534s
 User: 4.268s
 Sys: .007s
 
+Commit 5: 
+Real: .432s
+User: 3.893s
+Sys: .004s

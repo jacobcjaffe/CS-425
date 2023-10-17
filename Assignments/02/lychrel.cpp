@@ -54,90 +54,60 @@ int main() {
 	std::mutex queueMutex;
 
 	std::atomic<bool> _finished = false;
-	std::queue<std::vector<Number>> vecQueue;
+	std::atomic<size_t> _index = 0;
     // here is where we can parallelize the code
 	int LastId = MaxThreads - 1;
 
+	const int numRetrieved = 6;
 	// ok so first we need to loop through he threads at each pass
 	for (int id = 0; id < MaxThreads; ++id){
-		// have two threads continuously grabbing data
-		if (id == 0) {
-			std::thread th{[&, id]() {
-				std::vector<Number> buffer(4);
-				while (data.getNext(4, buffer)){
-					std::vector<Number> vect2;
-					copy(buffer.begin(), buffer.end(), back_inserter(vect2));
-					{
-						std::lock_guard lock{queueMutex};
-						vecQueue.push(vect2);
-					}
-				}
-				_finished = true;
-				barrier.arrive_and_wait();
-			}};
-			(id < LastId) ? th.detach() : th.join();
-		}
-		else {
-			std::thread th{[&, id]() {
-				Number number;
-				size_t iter = 0;
-				std::vector<Number> nums;
-				while(true) {
-					// check to see if thread can pull from queue
-					nums.clear();
-					{
-						std::lock_guard lock{queueMutex};
-						if (vecQueue.empty() && _finished) {
-							break;
-						}					
-						else if (!_finished) {
-							// need to wait for the queue to be filled
-							std::this_thread::yield();
-							continue;
-						}
-						else {
-							copy(vecQueue.front().begin(), vecQueue.front().end(), back_inserter(nums));
-							vecQueue.pop();
-						}
-					}
+		std::thread th{[&, id]() {
+			std::vector<Number> nums;
+			size_t iter = 0;
+			size_t ind;
+			while(data.getNext(numRetrieved, nums)) {
+				for (int i = 0; i < nums.size(); i++) {
+					Number number = nums[i];
+					Number n = number;
+					iter = 0;
 					
-					for (int i = 0; i < nums.size(); i++) {
-						number = nums[i];
-						iter = 0;
-						Number n = number;
-						while (!n.is_palindrome() && ++iter < MaxIterations) {
-							Number sum(n.size());
-							Number r = n.reverse();
-							auto rd = n.begin();
-							bool carry = false;
-							std::transform(n.rbegin(), n.rend(), sum.rbegin(), 
-								[&](auto d) {
-									auto v = d + *rd++ + carry;
-									carry = v > 9;
-									if (carry) { v -= 10; }
-									return v;
-								}
-							);
-							if (carry) { sum.push_front(1); }
-							n = sum;
-						}
-						{
-							std::lock_guard lock{mutex}; 
-							if (!(iter < maxIter || iter == MaxIterations)){
-								Record record{number, n};
-								if (iter > maxIter) {
-									records.clear();
-									maxIter = iter;
-								}
-								records.push_back(record);
+					// check if n is a palindrome
+					while (!n.is_palindrome() && ++iter < MaxIterations) {
+						Number sum(n.size());
+						Number r = n.reverse();
+						auto rd = n.begin();
+						bool carry = false;
+						std::transform(n.rbegin(), n.rend(), sum.rbegin(), 
+							[&](auto d) {
+								auto v = d + *rd++ + carry;
+								carry = v > 9;
+								if (carry) { v -= 10; }
+								return v;
 							}
+						);
+						if (carry) { sum.push_front(1); }
+						n = sum;
+					}
+
+					// lock
+					{
+						std::lock_guard lock{mutex}; 
+						if (!(iter < maxIter || iter == MaxIterations)){
+							Record record{number, n};
+							if (iter > maxIter) {
+								records.clear();
+								maxIter = iter;
+							}
+							records.push_back(record);
 						}
 					}
+
 				}
-				barrier.arrive_and_wait();
-			}};
-			(id < LastId) ? th.detach() : th.join();
-		}
+				nums.clear();
+			}
+			barrier.arrive_and_wait();
+		}};
+		(id < LastId) ? th.detach() : th.join();
 	}
     // Output our final results
     std::cout << "\nmaximum number of iterations = " << maxIter << "\n";
