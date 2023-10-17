@@ -72,7 +72,7 @@ int main() {
 					iter = 0;
 					
 					// check if n is a palindrome
-					while (!n.is_palindrome() && ++iter < MaxIterations) {
+					while (!n.is_palindrome() && (++iter < MaxIterations)) {
 						Number sum(n.size());
 						Number r = n.reverse();
 						auto rd = n.begin();

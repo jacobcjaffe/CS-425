@@ -31,3 +31,8 @@ Commit 5:
 Real: .432s
 User: 3.893s
 Sys: .004s
+
+Final Times:
+Real: 1m48.809s
+User: 18m1.492s
+Sys: 1.015s
