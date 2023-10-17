@@ -7,6 +7,8 @@
 #include <numeric>
 #include <span>
 #include <vector>
+#include <future>
+#include <thread>
 
 using namespace std;
 
@@ -214,6 +216,20 @@ Distance computePerimeter(const Face& face, const Vertices& vertices) {
 //    of each face in the model, reporting the index of the face with the
 //    smallest perimeter under the given transformation
 //
+//
+int findSmallest(Faces f, int start, int end) {
+	int smallestIdx = 0;
+	int smallestPer = std::numeric_limits<Distance>::infinity();
+	Vertices vertices;
+	for (int i = start; i < end; i++) {
+		auto perimeter = computePerimeter(f[i], vertices);
+		if (perimeter < smallestPer) {
+			smallestPer = perimeter;
+			smallestIdx = i;
+		}
+	}
+	return smallestIdx;
+}
 
 int main() {
     Vertices vertices;
@@ -226,6 +242,7 @@ int main() {
         Index index = 0;
     } minFace;
 
+	/*
     for (auto i = 0; i < faces.size(); ++i) {
         auto perimeter = computePerimeter(faces[i], vertices);
 
@@ -234,5 +251,23 @@ int main() {
             minFace.index = i;
         }
     }
+	*/
+	int results[4];
+	auto future1 = std::async(findSmallest, faces, 0, faces.size()/4);
+	auto future2 = std::async(findSmallest, faces, faces.size()/4, faces.size()/2);
+	auto future3 = std::async(findSmallest, faces, faces.size()/2, faces.size()*3/2);
+	auto future4 = std::async(findSmallest, faces, faces.size()*3/2, faces.size());
+	results[0] = future1.get();
+	results[1] = future2.get();
+	results[2] = future3.get();
+	results[3] = future4.get();
+	for (int i = 0; i < 4; i++) {
+		auto perimeter = computePerimeter(faces[results[i]], vertices);
+		if (perimeter < minFace.perimeter) {
+			minFace.perimeter = perimeter;
+			minFace.index = results[i];
+		}
+	}
+
     std::cout << "The smallest triangle is " << minFace.index << "\n";
 }
