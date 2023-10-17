@@ -7,6 +7,7 @@ Commits
     data repeatedly
 5: Simply used the getNext using a vector
 
+# These were from using test file
 Inital Timing:
 Real: .659s
 User: 4.141s
@@ -32,6 +33,7 @@ Real: .432s
 User: 3.893s
 Sys: .004s
 
+# This is from using the final file
 Final Times:
 Real: 1m47.949s
 User: 18m1.492s
