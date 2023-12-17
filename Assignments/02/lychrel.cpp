@@ -58,7 +58,7 @@ int main() {
     // here is where we can parallelize the code
 	int LastId = MaxThreads - 1;
 
-	const int numRetrieved = 6;
+	const int numRetrieved = 80;
 	// ok so first we need to loop through he threads at each pass
 	for (int id = 0; id < MaxThreads; ++id){
 		std::thread th{[&, id]() {
