@@ -29,7 +29,7 @@ const uint16_t DefaultPort = 8124; // Update this variable with your assigned po
 
 class rBuffer {
 	private:
-	int size = 16;
+	int size = 25;
 	int back = 0;
 	int front = 0;
 	std::atomic<int> count = 0;
@@ -62,7 +62,7 @@ std::atomic<bool> quit = false;
 void IssueResponse(rBuffer* r) {
 	std::vector<HTTPResponse*> buf1;
 	std::vector<Session*> buf2;
-	while(true) {
+	while(!quit) {
 		ready.acquire();
 		auto val = r->pop_back();
 		auto response = std::get<0>(val);
@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
         //   Each request is merely an ASCII string (with some special
         //   characters specially encoded.  We don't implement all that
         //   fancy stuff here.  We're keeping it simple).
-        Session session(connection.accept());
+        //Session session(connection.accept());
 	Session* s = new Session(connection.accept());
 
         // A message received from the client will be a string like
@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
         //    Here, we merely read that string from the socket into
         //    a string.
         std::string msg;
-        session >> msg;
+        *s >> msg;
 
         // If you want to see the raw "protocol", uncomment the
         //   following line:
@@ -161,8 +161,6 @@ int main(int argc, char* argv[]) {
 	//pFuture = std::async([request, &session]() {
         //std::cout << request << "\n";
 	// asynchronously start adding the responses to the buffer
-	pFuture = std::async(std::launch::async, [request, &b, &s]() {
-	});
 	fillable.acquire();
 	const char* root = "/home/faculty/shreiner/public_html/03";
 	HTTPResponse* response = new HTTPResponse(request, root);
