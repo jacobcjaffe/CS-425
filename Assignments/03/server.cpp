@@ -3,6 +3,8 @@
 #include <chrono>
 #include <future>
 #include <vector>
+#include <semaphore>
+#include <thread>
 
 // These are custom classes that encode the web transactions.  They're
 //   actually quite simple (mostly because we're solving a very limited)
@@ -25,33 +27,71 @@
 //
 const uint16_t DefaultPort = 8124; // Update this variable with your assigned port value
 
-void Respond(HTTPRequest& request, Session& session) {
-    auto future = std::async(std::launch::async, [&request, &session]() {
-	const char* root = "/home/faculty/shreiner/public_html/03";
-	HTTPResponse response(request, root);
-		
+class rBuffer {
+	private:
+	int size = 16;
+	int back = 0;
+	int front = 0;
+	std::atomic<int> count = 0;
+	std::vector<HTTPResponse*> buffer1;
+	std::vector<Session*> buffer2;
+	std::mutex bLock;
+	public:
+	rBuffer() {
+		buffer1.resize(size);
+		buffer2.resize(size);
+	}
+	void insert(HTTPResponse* n, Session* s) {
+		buffer1[back] = n;
+		buffer2[back] = s;
+		back = (back + 1) % size;
+	};
+	std::tuple<HTTPResponse*, Session*> pop_back() {
+		auto val1 = buffer1[front];
+		auto val2 = buffer2[front];
+		front = (front + 1) % size;
+		return std::make_tuple(val1, val2);
+	};
 
+};
 
-        //  Again, if you want to see the contents of the response
-        //    (specifically, the header, which is human readable, but
-        //    not the returned data), you can just print this to
-        //    std::cout as well.
-        //
-        std::cout << response << "\n";
+std::counting_semaphore<9> fillable{9};
+std::counting_semaphore<9> ready{0};
+std::atomic<bool> quit = false;
 
-        // Most importantly, send the response back to the web client.
-        //
-        // We keep using the same session until we get an empty
-        //   message, which indicates this session is over.
-	session << response;
-    });
-
+void IssueResponse(rBuffer* r) {
+	std::vector<HTTPResponse*> buf1;
+	std::vector<Session*> buf2;
+	while(true) {
+		ready.acquire();
+		auto val = r->pop_back();
+		auto response = std::get<0>(val);
+		auto session = std::get<1>(val);
+		std::cout << "RESPONSE: " << response;
+		*session << *response;
+		buf1.push_back(response);
+		buf2.push_back(session);
+		delete session;
+		delete response;
+		fillable.release();
+	}
+	return;
 }
+
+std::atomic<bool> brokenConnection = false;
 
 int main(int argc, char* argv[]) {
     std::vector<std::future<void>> pending_futures;
     std::future<void> pFuture;
+    std::mutex bufferLock;
+    std::vector<std::thread> tVec(16);
+    rBuffer* b = new rBuffer();
+    for (int i = 0; i < 16; i++) {
+	    tVec[i] = std::thread(IssueResponse, std::ref(b));
+    }
+
     uint16_t port = argc > 1 ? std::stol(argv[1]) : DefaultPort;
+    //std::packaged_task<void(HTTPRequest&, Session&)> p(Respond);
 
     // Opens a connection on the given port.  With a suitable URL
     //
@@ -69,15 +109,15 @@ int main(int argc, char* argv[]) {
     //   request.  When the request is made, our connection "accepts"
     //   the connection, and starts a session.
     while (connection) {
-	pFuture = std::async(std::launch::async, [&connection]() {
+	//pFuture = std::async(std::launch::async, [&connection]() {
 
-        std::cout << "    Starting new session!!!!!" << std::endl;
         // A session is composed of a bunch of requests (from the "client",
         //   like a web browser), and responses from us, the web "server".
         //   Each request is merely an ASCII string (with some special
         //   characters specially encoded.  We don't implement all that
         //   fancy stuff here.  We're keeping it simple).
         Session session(connection.accept());
+	Session* s = new Session(connection.accept());
 
         // A message received from the client will be a string like
         //
@@ -91,7 +131,7 @@ int main(int argc, char* argv[]) {
         // If you want to see the raw "protocol", uncomment the
         //   following line:
         //
-        //std::cout << msg;
+        std::cout << "MESSAGE: " << msg;
 
         // However, if our msg has requests in it, we send it to a
         //   request parser, HTTPRequest.  The resulting request
@@ -102,7 +142,7 @@ int main(int argc, char* argv[]) {
         //  If you want to see the parsed message, just uncomment the
         //    following line:
         //
-        //std::cout << request << "\n";
+        //std::cout << "REQUEST: " << request << "\n";
 
         //  if you want to see the parsed options, uncomment the
         //    following line
@@ -119,9 +159,16 @@ int main(int argc, char* argv[]) {
         //   files the server is able to send is located.  We include
         //   that path here, so we're all looking at the same files.
 	//pFuture = std::async([request, &session]() {
-        std::cout << request << "\n";
+        //std::cout << request << "\n";
+	// asynchronously start adding the responses to the buffer
+	pFuture = std::async(std::launch::async, [request, &b, &s]() {
+	});
+	fillable.acquire();
 	const char* root = "/home/faculty/shreiner/public_html/03";
-	HTTPResponse response(request, root);
+	HTTPResponse* response = new HTTPResponse(request, root);
+	std::cout << *response << std::endl;
+	b->insert(response, s);
+	ready.release();
 		
 
 
@@ -136,8 +183,6 @@ int main(int argc, char* argv[]) {
         //
         // We keep using the same session until we get an empty
         //   message, which indicates this session is over.
-	session << response;
-	std::cout << "done" << std::endl;
-	});
+	//session << response;
     }
 }
