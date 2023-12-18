@@ -1,5 +1,8 @@
 
 #include <iostream>
+#include <chrono>
+#include <future>
+#include <vector>
 
 // These are custom classes that encode the web transactions.  They're
 //   actually quite simple (mostly because we're solving a very limited)
@@ -20,9 +23,34 @@
 //
 //  (Don't use any of them.  Generally, above 9000 is usually pretty clear)
 //
-const uint16_t DefaultPort = 8142; // Update this variable with your assigned port value
+const uint16_t DefaultPort = 8124; // Update this variable with your assigned port value
+
+void Respond(HTTPRequest& request, Session& session) {
+    auto future = std::async(std::launch::async, [&request, &session]() {
+	const char* root = "/home/faculty/shreiner/public_html/03";
+	HTTPResponse response(request, root);
+		
+
+
+        //  Again, if you want to see the contents of the response
+        //    (specifically, the header, which is human readable, but
+        //    not the returned data), you can just print this to
+        //    std::cout as well.
+        //
+        std::cout << response << "\n";
+
+        // Most importantly, send the response back to the web client.
+        //
+        // We keep using the same session until we get an empty
+        //   message, which indicates this session is over.
+	session << response;
+    });
+
+}
 
 int main(int argc, char* argv[]) {
+    std::vector<std::future<void>> pending_futures;
+    std::future<void> pFuture;
     uint16_t port = argc > 1 ? std::stol(argv[1]) : DefaultPort;
 
     // Opens a connection on the given port.  With a suitable URL
@@ -41,7 +69,9 @@ int main(int argc, char* argv[]) {
     //   request.  When the request is made, our connection "accepts"
     //   the connection, and starts a session.
     while (connection) {
+	pFuture = std::async(std::launch::async, [&connection]() {
 
+        std::cout << "    Starting new session!!!!!" << std::endl;
         // A session is composed of a bunch of requests (from the "client",
         //   like a web browser), and responses from us, the web "server".
         //   Each request is merely an ASCII string (with some special
@@ -61,7 +91,7 @@ int main(int argc, char* argv[]) {
         // If you want to see the raw "protocol", uncomment the
         //   following line:
         //
-        // std::cout << msg;
+        //std::cout << msg;
 
         // However, if our msg has requests in it, we send it to a
         //   request parser, HTTPRequest.  The resulting request
@@ -72,12 +102,12 @@ int main(int argc, char* argv[]) {
         //  If you want to see the parsed message, just uncomment the
         //    following line:
         //
-        // std::cout << request << "\n";
+        //std::cout << request << "\n";
 
         //  if you want to see the parsed options, uncomment the
         //    following line
         //
-        // std::cout << request.options() << "\n";
+        //std::cout << request.options() << "\n";
 
         // We create a response to the request, which we encode in
         //   an HTTPResponse object.  It prepares the appropriate
@@ -88,20 +118,26 @@ int main(int argc, char* argv[]) {
         //   a filesystem), which is the top-level of where all of the
         //   files the server is able to send is located.  We include
         //   that path here, so we're all looking at the same files.
-        const char* root = "/home/faculty/shreiner/public_html/03";
-        HTTPResponse response(request, root);
+	//pFuture = std::async([request, &session]() {
+        std::cout << request << "\n";
+	const char* root = "/home/faculty/shreiner/public_html/03";
+	HTTPResponse response(request, root);
+		
+
 
         //  Again, if you want to see the contents of the response
         //    (specifically, the header, which is human readable, but
         //    not the returned data), you can just print this to
         //    std::cout as well.
         //
-        // std::cout << response << "\n";
+        //std::cout << response << "\n";
 
         // Most importantly, send the response back to the web client.
         //
         // We keep using the same session until we get an empty
         //   message, which indicates this session is over.
-        session << response;
+	session << response;
+	std::cout << "done" << std::endl;
+	});
     }
 }
